@@ -30,36 +30,47 @@ document.getElementById('submit').addEventListener('click', async () => {
         return;
     }
 
-    // // pull war start time
-    // if (Object.keys(factionInfo.ranked_wars).length === 0) {
-    //     alert('Unable to fetch ranked war info');
-    //     return;
-    // }
-
-    // let warId = Object.keys(factionInfo.ranked_wars)[0];
-    // let startTime = factionInfo.ranked_wars[warId].war.start;
-    // let endTime = factionInfo.ranked_wars[warId].war.end;
-
-    let startTime = 1657152000;
-    let endTime = 1657330157;
-
-    // pull attacks after start of war
-    let attacks = await getAttacks(apiKey, factionId, startTime, endTime);
-
-    if ('error' in attacks) {
-        alert('Unable to fetch attacks: ' + attacks.error.error);
+    // pull war start time
+    if (Object.keys(factionInfo.ranked_wars).length === 0) {
+        alert('Unable to fetch ranked war info');
         return;
     }
 
-    let attackList = Object.keys(attacks.attacks).map(function (key) {
-        return attacks.attacks[key];
-    });
+    let warId = Object.keys(factionInfo.ranked_wars)[0];
+    let startTime = factionInfo.ranked_wars[warId].war.start;
+    let endTime = factionInfo.ranked_wars[warId].war.end;
+
+    let fetchMore = true;
+    let attackList = []
+
+    // attacks API only returns 100 items, so we need to fetch in batches
+    while (fetchMore) {
+        // pull attacks after start of war
+        let attacks = await getAttacks(apiKey, factionId, startTime, endTime);
+
+        if ('error' in attacks) {
+            alert('Unable to fetch attacks: ' + attacks.error.error);
+            return;
+        }
+
+        let partialAttackList = Object.keys(attacks.attacks).map(function (key) {
+            return attacks.attacks[key];
+        });
+
+        if (partialAttackList.length == 100) {
+            startTime = partialAttackList[partialAttackList.length - 1].timestamp_started;
+        } else {
+            fetchMore = false;
+        }
+
+        attackList = attackList.concat(partialAttackList);
+    }
 
     // filter for hits made by faction
     attackList = attackList.filter(item => item.attacker_faction === factionId);
 
     // filter for war hits only (ranked_war: 1)
-    // attackList = attackList.filter(item => item.ranked_war === 1);
+    attackList = attackList.filter(item => item.ranked_war === 1);
 
     // aggregate data accordingly
     let attackStats = {};
