@@ -40,31 +40,62 @@ document.getElementById('submit').addEventListener('click', async () => {
     let startTime = factionInfo.ranked_wars[warId].war.start;
     let endTime = factionInfo.ranked_wars[warId].war.end;
 
-    let fetchMore = true;
-    let attackList = []
+    if (endTime !== 0) {
+        endTime += 1;
+    }
+
+    // turn on spinner
+    document.getElementById('spinner').style.display = 'block';
+
+    let attackDictionary = {};
 
     // attacks API only returns 100 items, so we need to fetch in batches
-    while (fetchMore) {
+    while (startTime < endTime) {
         // pull attacks after start of war
         let attacks = await getAttacks(apiKey, factionId, startTime, endTime);
 
         if ('error' in attacks) {
+            // turn off spinner
+            document.getElementById('spinner').style.display = 'none';
             alert('Unable to fetch attacks: ' + attacks.error.error);
             return;
         }
 
-        let partialAttackList = Object.keys(attacks.attacks).map(function (key) {
-            return attacks.attacks[key];
-        });
+        // unnest object
+        attacks = attacks.attacks;
 
-        if (partialAttackList.length == 100) {
-            startTime = partialAttackList[partialAttackList.length - 1].timestamp_started;
-        } else {
-            fetchMore = false;
+        console.log(attacks);
+        console.log(Object.keys(attacks).length);
+
+        // empty response - no further attacks
+        if (Object.keys(attacks).length === 0) {
+            break;
         }
 
-        attackList = attackList.concat(partialAttackList);
+        // time cutoff issue - only last attack in previous batch is returned
+        if (Object.keys(attacks).length === 1 && Object.keys(attacks)[0] in attackDictionary) {
+            break;
+        }
+
+        attackDictionary = Object.assign({}, attackDictionary, attacks);
+
+        // get next batch of attacks
+        let attackIds = Object.keys(attacks).sort();
+        let lastAttackId = attackIds[attackIds.length - 1];
+        startTime = attacks[lastAttackId].timestamp_started;
+
+        if (startTime > endTime) {
+            break;
+        }
+
+        // sleep for 30 seconds because Torn API caches responses >:(
+        await sleep(30000);
     }
+
+    // convert to list
+    let attackList = Object.keys(attackDictionary).map(function (key) {
+        return attackDictionary[key];
+    });
 
     // filter for hits made by faction
     attackList = attackList.filter(item => item.attacker_faction === factionId);
@@ -145,8 +176,11 @@ document.getElementById('submit').addEventListener('click', async () => {
         attackStatRow.insertCell().appendChild(document.createTextNode(attackStat['Lost']));
 
         // Respect column
-        attackStatRow.insertCell().appendChild(document.createTextNode(Math.round(attackStat['Respect'] * 100) / 100));
+        attackStatRow.insertCell().appendChild(document.createTextNode(attackStat['Respect'].toFixed(2)));
     }
+
+    // turn off spinner
+    document.getElementById('spinner').style.display = 'none';
 });
 
 async function getUserInfo(apiKey) {
@@ -167,4 +201,8 @@ async function getAttacks(apiKey, factionId, startTime, endTime) {
 function constructUrl(apiKey, factionId, selection, startTime, endTime) {
     let baseUrl = [apiEndpoint, 'faction', factionId].join('/');
     return baseUrl + '?' + new URLSearchParams({ selections: selection, key: apiKey, from: startTime, to: endTime });
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
