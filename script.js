@@ -50,7 +50,7 @@ document.getElementById('submit').addEventListener('click', async () => {
     let attackDictionary = {};
 
     // attacks API only returns 100 items, so we need to fetch in batches
-    while (startTime < endTime) {
+    while (startTime < endTime || endTime === 0) {
         // pull attacks after start of war
         let attacks = await getAttacks(apiKey, factionId, startTime, endTime);
 
@@ -84,7 +84,7 @@ document.getElementById('submit').addEventListener('click', async () => {
         let lastAttackId = attackIds[attackIds.length - 1];
         startTime = attacks[lastAttackId].timestamp_started;
 
-        if (startTime > endTime) {
+        if (startTime > endTime && endTime !== 0) {
             break;
         }
 
